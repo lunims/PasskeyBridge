@@ -1,0 +1,10 @@
+{
+    "manifest_version": 3,
+    "name": "PasskeyBridge",
+    "description": "A bridge for legacy sites to support Passkey authentication",
+    "version": "0.1.0",
+    "action": {
+        "default_popup": "popup/popup.html"
+    },
+    "permissions": ["storage"]
+}
