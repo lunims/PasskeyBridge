@@ -32,8 +32,9 @@ async function inject(tabId, func, args = []) {
 async function handleDerive(tab) {
   const hostname = new URL(tab.url).hostname;
   const saltBuffer = await hostnameToSalt(hostname);
+  const saltArray = Array.from(new Uint8Array(saltBuffer));
 
-  const { result, error } = await inject(tab.id, deriveHashInPage, [saltBuffer]);
+  const { result, error } = await inject(tab.id, deriveHashInPage, [saltArray]);
   if (error) return { error };
 
   const prfBuffer = new Uint8Array(result.prfResult).buffer;

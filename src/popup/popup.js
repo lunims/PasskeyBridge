@@ -26,12 +26,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const tab = await getActiveTab();
       const hostname = new URL(tab.url).hostname;
       const saltBuffer = await hostnameToSalt(hostname);
+      const saltArray = Array.from(new Uint8Array(saltBuffer));
 
       const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: "MAIN",
         func: deriveHashInPage,
-        args: [saltBuffer],
+        args: [saltArray],
       });
 
       if (result?.error) return result;

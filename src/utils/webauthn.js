@@ -1,3 +1,11 @@
+// These functions are passed directly to chrome.scripting.executeScript's
+// `func` option and re-serialized into the target page's MAIN world.
+// They cannot close over anything outside themselves. Any arguments passed
+// in via `args`, and any values returned out, must be plain
+// JSON-serializable data — raw ArrayBuffers are NOT reliably serializable
+// across this specific boundary, so they're converted to plain arrays
+// on both sides.
+
 export async function registerPasskeyInPage() {
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -16,7 +24,10 @@ export async function registerPasskeyInPage() {
           { type: "public-key", alg: -7 },
           { type: "public-key", alg: -257 },
         ],
-        authenticatorSelection: { residentKey: "required", userVerification: "required" },
+        authenticatorSelection: {
+          residentKey: "required",
+          userVerification: "required",
+        },
         extensions: { prf: {} },
         attestation: "none",
       },
@@ -32,8 +43,11 @@ export async function registerPasskeyInPage() {
   }
 }
 
-export async function deriveHashInPage(saltBuffer) {
+// saltArray: plain array of bytes (NOT an ArrayBuffer — see note above)
+export async function deriveHashInPage(saltArray) {
   try {
+    const saltBuffer = new Uint8Array(saltArray).buffer;
+
     const assertion = await navigator.credentials.get({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
@@ -49,8 +63,6 @@ export async function deriveHashInPage(saltBuffer) {
 
     return {
       credentialId: assertion.id,
-      // ArrayBuffer needs converting to a plain array to survive the
-      // structured-clone boundary back out of executeScript reliably.
       prfResult: Array.from(new Uint8Array(prfResult)),
     };
   } catch (err) {
