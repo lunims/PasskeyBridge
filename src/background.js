@@ -1,61 +1,42 @@
+import { registerPasskeyInPage, deriveHashInPage } from "./utils/webauthn.js";
+import { hostnameToSalt, encodeSecret } from "./utils/encoder.js";
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "REGISTER_PASSKEY" && sender.tab?.id) {
-    chrome.scripting
-      .executeScript({
-        target: { tabId: sender.tab.id },
-        world: "MAIN",
-        func: registerPasskeyInPage,
-      })
-      .then((results) => {
-        // executeScript returns an array (one entry per frame); take the top frame's result
-        const result = results[0]?.result;
-        if (result?.error) {
-          sendResponse({ error: result.error });
-        } else {
-          sendResponse({ result });
-        }
-      })
-      .catch((err) => sendResponse({ error: err.message }));
-    return true; // keep the message channel open for the async response
+  if (!sender.tab?.id) return;
+
+  if (msg.type === "REGISTER_PASSKEY") {
+    inject(sender.tab.id, registerPasskeyInPage).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "DERIVE_HASH") {
+    handleDerive(sender.tab).then(sendResponse);
+    return true;
   }
 });
 
-// This function is injected and runs in the page's own MAIN world.
-// It cannot close over any outer variables — everything it needs must
-// be computed inside it or passed via executeScript's `args`.
-async function registerPasskeyInPage() {
+async function inject(tabId, func, args = []) {
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const userId = crypto.getRandomValues(new Uint8Array(16));
-
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: `Passkey Bridge (${location.hostname})` },
-        user: {
-          id: userId,
-          name: `bridge@${location.hostname}`,
-          displayName: `Passkey Bridge — ${location.hostname}`,
-        },
-        pubKeyCredParams: [
-          { type: "public-key", alg: -7 },
-          { type: "public-key", alg: -257 },
-        ],
-        authenticatorSelection: {
-          residentKey: "required",
-          userVerification: "required",
-        },
-        extensions: { prf: {} },
-        attestation: "none",
-      },
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func,
+      args,
     });
-
-    return {
-      credentialId: cred.id,
-      prfSupported: cred.getClientExtensionResults()?.prf?.enabled === true,
-      hostname: location.hostname,
-    };
+    return result?.error ? { error: result.error } : { result };
   } catch (err) {
     return { error: err.message };
   }
+}
+
+async function handleDerive(tab) {
+  const hostname = new URL(tab.url).hostname;
+  const saltBuffer = await hostnameToSalt(hostname);
+
+  const { result, error } = await inject(tab.id, deriveHashInPage, [saltBuffer]);
+  if (error) return { error };
+
+  const prfBuffer = new Uint8Array(result.prfResult).buffer;
+  const hash = await encodeSecret(prfBuffer);
+  return { result: { hostname, credentialId: result.credentialId, hash } };
 }
