@@ -4,7 +4,6 @@ const HKDF_SALT = new TextEncoder().encode(
   "my-app:password-generation:v1"
 );
 
-
 /**
   Password Generation scheme:
   1. Derive the hash with deterministic salt
