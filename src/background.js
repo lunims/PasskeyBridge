@@ -1,43 +1,16 @@
-import { registerPasskeyInPage, deriveHashInPage } from "./utils/webauthn.js";
-import { hostnameToSalt, encodeSecret } from "./utils/encoder.js";
+import { handleRegister, handleDerive } from "./utils/utils.js";
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!sender.tab?.id) return;
 
   if (msg.type === "REGISTER_PASSKEY") {
-    inject(sender.tab.id, registerPasskeyInPage).then(sendResponse);
+    handleRegister({ tabId: sender.tab.id }).then(sendResponse);
     return true;
   }
 
   if (msg.type === "DERIVE_HASH") {
-    handleDerive(sender.tab).then(sendResponse);
+    const hostname = new URL(sender.tab.url).hostname;
+    handleDerive({ tabId: sender.tab.id, hostname }).then(sendResponse);
     return true;
   }
 });
-
-async function inject(tabId, func, args = []) {
-  try {
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId },
-      world: "MAIN",
-      func,
-      args,
-    });
-    return result?.error ? { error: result.error } : { result };
-  } catch (err) {
-    return { error: err.message };
-  }
-}
-
-async function handleDerive(tab) {
-  const hostname = new URL(tab.url).hostname;
-  const saltBuffer = await hostnameToSalt(hostname);
-  const saltArray = Array.from(new Uint8Array(saltBuffer));
-
-  const { result, error } = await inject(tab.id, deriveHashInPage, [saltArray]);
-  if (error) return { error };
-
-  const prfBuffer = new Uint8Array(result.prfResult).buffer;
-  const hash = await encodeSecret(prfBuffer);
-  return { result: { hostname, credentialId: result.credentialId, hash } };
-}
