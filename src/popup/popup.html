@@ -3,21 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>PasskeyBridge</title>
     <link rel="stylesheet" href="bulma.min.css" />
 </head>
-<body>
 
+<body>
     <div class="container">
         <h1 class="title">PasskeyBridge</h1>
     </div>
-
     <div class="container">
-        <button class="button is-success" id="registerBtn">Register Passkey</button>
-        <button class="button is-info" id="deriveBtn">Derive Hash</button>
+        <div class="field">
+            <label class="label" for="passwordLength">
+                Password length
+            </label>
+
+            <div class="control">
+                <input class="input" type="number" id="passwordLength" min="1" max="256" value="16">
+            </div>
+        </div>
+
+        <div class="field">
+            <label class="label">Password character types</label>
+            <div class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="uppercase" checked>
+                    A-Z
+                </label>
+            </div>
+            <div class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="lowercase" checked>
+                    a-z
+                </label>
+            </div>
+            <div class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="digits" checked>
+                    0-9
+                </label>
+            </div>
+            <div class="control">
+                <label class="checkbox">
+                    <input type="checkbox" id="special" checked>
+                    !@#$%^&*
+                </label>
+            </div>
+            <div class="control">
+                <button class="button is-primary" id="saveSettingsBtn">
+                    Save Settings
+                </button>
+            </div>
+        </div>
+
+        <button class="button is-success" id="registerBtn">
+            Register Passkey
+        </button>
+
+        <button class="button is-info" id="deriveBtn">
+            Derive Hash
+        </button>
+
         <p id="status"></p>
     </div>
-    
+
     <script src="popup.js" type="module"></script>
 </body>
 </html>

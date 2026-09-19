@@ -53,9 +53,9 @@ export async function handleDerive({ tabId, hostname }) {
 
   const { result, error } = await inject(tabId, deriveHashInPage, [saltArray]);
   if (error) return { error };
-
+  const settings = await loadSettings(hostname);
   const prfBuffer = new Uint8Array(result.prfResult).buffer;
-  const password = await generateSecret(prfBuffer);
+  const password = await generateSecret(prfBuffer, settings);
 
   return {
     result: {
@@ -79,4 +79,24 @@ export async function handleDerive({ tabId, hostname }) {
 export async function handleRegister({ tabId }) {
   const { registerPasskeyInPage } = await import("./webauthn.js");
   return inject(tabId, registerPasskeyInPage);
+}
+
+const DEFAULT_SETTINGS = {
+  length: 16,
+  uppercase: true,
+  lowercase: true,
+  digits: true,
+  special: true,
+};
+
+export async function loadSettings(hostname) {
+  const key = `siteSettings:${hostname}`;
+  const stored = await chrome.storage.local.get(key);
+  const settings = stored[key] ?? DEFAULT_SETTINGS;
+  return settings;
+}
+
+export async function saveSettings(settings, hostname) {
+  const key = `siteSettings:${hostname}`;
+  await chrome.storage.local.set({ [key]: settings });
 }

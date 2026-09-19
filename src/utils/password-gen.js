@@ -17,7 +17,11 @@ const HKDF_SALT = new TextEncoder().encode(
  * @param {*} length 
  * @returns 
  */
-export async function generateSecret(prfResultBuffer, length = 20) {
+export async function generateSecret(prfResultBuffer, settings) {
+  console.log(settings);
+  const length = settings.length;
+  console.log("LENGTH");
+  console.log(length);
   // 1. already happened and is stored in prfResultBuffer
   const character_set = PASSWORD_ALPHABET;
   const n = character_set.length;
