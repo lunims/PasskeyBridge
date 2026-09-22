@@ -1,23 +1,23 @@
-import { deriveHashInPage } from "./webauthn.js";
+import { deriveHashInPage, registerPasskeyInPage } from "./webauthn.js";
 import { generateSecret } from "./password-gen.js";
 
 /**
- * Dervies a deterministic 32-byte salt from a hostname.
- * 
+ * Derives a deterministic 32-byte salt from a hostname.
+ *
  * @param {string} hostname - hostname of the website to derive the salt
  * @returns {Promise<ArrayBuffer>} SHA-256 digest of the hostname.
  */
 export async function hostnameToSalt(hostname) {
-  const enc = new TextEncoder().encode(`${hostname}`);
+  const enc = new TextEncoder().encode(`passkey-bridge:v1:${hostname}`);
   return crypto.subtle.digest("SHA-256", enc);
 }
 
 /**
  * Executes a function in the page's main world
- * 
+ *
  * @param {int} tabId - ID of the browser tab whose page context to run in
- * @param {Function} func - Function to be executed in the page's main world 
- * @param {Array} args - Arguments to pass to the function 
+ * @param {Function} func - Function to be executed in the page's main world
+ * @param {Array} args - Arguments to pass to the function
  * @returns {Promise<{result?: any, error?: string}>} - An object containing the function result or an error
  *      message if execution failed
  */
@@ -36,16 +36,16 @@ async function inject(tabId, func, args = []) {
 }
 
 /**
- * Wrapper function to orchestrate the password generation sequence
- * First: calls the Passkey PRF extension inside the page's main world via inject() 
- *  with the hostname and retrieves the hash value via deriveHash() of webauthn.js.
- * Then: calls generateSecret() of password-gen.js to actually generate the password.
- * 
- * 
- * @param {Object} params 
+ * Wrapper function to orchestrate the password generation sequence.
+ * First: calls the Passkey PRF extension inside the page's main world via
+ * inject() with a hostname-derived salt and retrieves the raw PRF result
+ * via deriveHashInPage() from webauthn.js.
+ * Then: calls encodeSecret() from password-gen.js to generate the password.
+ *
+ * @param {Object} params
  * @param {int} params.tabId - ID of the browser tab whose page context to run in
  * @param {string} params.hostname - Hostname of the site to derive a password for
- * @returns 
+ * @returns {Promise<{result?: any, error?: string}>}
  */
 export async function handleDerive({ tabId, hostname }) {
   const saltBuffer = await hostnameToSalt(hostname);
@@ -53,6 +53,7 @@ export async function handleDerive({ tabId, hostname }) {
 
   const { result, error } = await inject(tabId, deriveHashInPage, [saltArray]);
   if (error) return { error };
+
   const settings = await loadSettings(hostname);
   const prfBuffer = new Uint8Array(result.prfResult).buffer;
   const password = await generateSecret(prfBuffer, settings);
@@ -61,23 +62,22 @@ export async function handleDerive({ tabId, hostname }) {
     result: {
       hostname,
       credentialId: result.credentialId,
-      password: password,
+      password,
     },
   };
 }
 
-
 /**
  * Wrapper function to orchestrate Passkey registration sequence
- * - Calls registerPasskey() from webauthn.js and executes inside the pages main world via inject
- * 
+ * - Calls registerPasskeyInPage() from webauthn.js and executes it
+ *   inside the page's main world via inject().
+ *
  * @param {Object} params - Function parameters.
  * @param {number} params.tabId - ID of the browser tab whose page context to run the registration sequence in.
- * @returns {Promise<{result?: any, error?: string}>} The result of the Passkey registration, 
+ * @returns {Promise<{result?: any, error?: string}>} The result of the Passkey registration,
  *      or an error message if execution fails.
  */
 export async function handleRegister({ tabId }) {
-  const { registerPasskeyInPage } = await import("./webauthn.js");
   return inject(tabId, registerPasskeyInPage);
 }
 
@@ -89,11 +89,23 @@ const DEFAULT_SETTINGS = {
   special: true,
 };
 
+export async function getActiveTab() {
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true
+  });
+
+  if (!tab?.id) {
+    throw new Error("No active tab found");
+  }
+
+  return tab;
+}
+
 export async function loadSettings(hostname) {
   const key = `siteSettings:${hostname}`;
   const stored = await chrome.storage.local.get(key);
-  const settings = stored[key] ?? DEFAULT_SETTINGS;
-  return settings;
+  return stored[key] ?? DEFAULT_SETTINGS;
 }
 
 export async function saveSettings(settings, hostname) {

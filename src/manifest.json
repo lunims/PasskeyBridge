@@ -7,10 +7,10 @@
     "permissions": ["storage", "scripting"],
     "host_permissions": ["<all_urls>"],
     "content_scripts": [
-        { 
-            "matches": ["<all_urls>"], 
-            "js": ["content-script.js"], 
-            "run_at": "document_idle" 
+        {
+            "matches": ["<all_urls>"],
+            "js": ["utils/field-detection.js", "content-script.js"],
+            "run_at": "document_idle"
         }
     ],
     "background": {

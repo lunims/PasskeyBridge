@@ -1,8 +1,29 @@
 const PASSWORD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const lowercase = "abcdefghijklmnopqrstuvwxyz";
+const digits    = "0123456789";
+const special   = "!@#$%^&*";
 
 const HKDF_SALT = new TextEncoder().encode(
   "my-app:password-generation:v1"
 );
+
+function getCharacterSet(settings) {
+  let character_set = "";
+  if(settings.uppercase) {
+    character_set += uppercase;
+  }
+  if(settings.lowercase) {
+    character_set += lowercase;
+  }
+  if(settings.digits) {
+    character_set += digits;
+  }
+  if(settings.special) {
+    character_set += special;
+  }
+  return character_set;
+}
 
 /**
   Password Generation scheme:
@@ -20,10 +41,8 @@ const HKDF_SALT = new TextEncoder().encode(
 export async function generateSecret(prfResultBuffer, settings) {
   console.log(settings);
   const length = settings.length;
-  console.log("LENGTH");
-  console.log(length);
   // 1. already happened and is stored in prfResultBuffer
-  const character_set = PASSWORD_ALPHABET;
+  const character_set = getCharacterSet(settings);
   const n = character_set.length;
 
   // 2. Use the hash as input to a KDF (we use HKDF)
@@ -65,6 +84,13 @@ export async function generateSecret(prfResultBuffer, settings) {
         break;
       }
     }
+    /*
+    TODO: Policy compliance, check if password matches specified policy (this also needs settings in UI)
+    Two approaches: Bitwarden: generate needed characters first and shuffle them into
+                    1Password: Generate password, see if it matches, if not try again
+    */
   }
+  // TODO: Log to be removed, just for testing purposes
+  console.log(password);
   return password;
 }

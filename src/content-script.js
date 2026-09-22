@@ -1,65 +1,157 @@
 (function () {
-  if (document.getElementById("passkey-bridge-btn")) return;
+  const { fillLogin, focusOrSubmit, findPasswordField } = window.PasskeyBridgeFieldDetection;
 
-  const container = document.createElement("div");
-  Object.assign(container.style, {
-    position: "fixed",
-    bottom: "20px",
-    right: "20px",
-    zIndex: "2147483647",
-    display: "flex",
-    gap: "8px",
-    fontFamily: "system-ui, sans-serif",
-  });
+  function fillDerivedPassword(password, autoSubmit = false) {
+    const request = {
+      origin: window.location.origin,
+      fields: ["secret"],
+      allowNoSecret: false,
+      allowForeign: false,
+      foreignFills: {},
+      autoSubmit,
+      login: {
+        fields: {
+          secret: password,
+        },
+      },
+    };
 
-  const registerBtn = makeButton("register-btn", "🔑 Register Passkey", "#175ddc");
-  const deriveBtn = makeButton("derive-btn", "#️⃣ Derive Hash", "#0e9f6e");
+    const fillResult = fillLogin(request);
 
-  container.appendChild(registerBtn);
-  container.appendChild(deriveBtn);
-  document.documentElement.appendChild(container);
+    if (fillResult.filledFields.length > 0) {
+      focusOrSubmit({ ...request, filledFields: fillResult.filledFields });
+    }
 
-  registerBtn.addEventListener("click", () =>
-    runAction(registerBtn, "REGISTER_PASSKEY", "Waiting for authenticator…")
-  );
-  deriveBtn.addEventListener("click", () =>
-    runAction(deriveBtn, "DERIVE_HASH", "Deriving hash…")
-  );
+    return fillResult;
+  }
 
-  function runAction(btn, type, waitingMsg) {
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = waitingMsg;
+  function runAction(item, type, waitingMsg, onSuccess) {
+    const originalText = item.textContent;
+    item.textContent = waitingMsg;
+    item.style.pointerEvents = "none";
 
     chrome.runtime.sendMessage({ type }, (response) => {
-      if (response?.error) {
-        console.error(`[Passkey Bridge] ${type} failed for "${location.hostname}"`, response.error);
-        btn.textContent = "❌ Failed — see console";
+      if (!response || response.error) {
+        console.error(
+          `[Passkey Bridge] ${type} failed for "${location.hostname}"`,
+          response?.error ?? "no response received"
+        );
+        item.textContent = "❌ Failed — see console";
       } else {
-        console.log(`[Passkey Bridge] ${type} succeeded for "${location.hostname}"`, response.result);
-        btn.textContent = "✅ Done";
+        onSuccess(response);
+        item.textContent = "✅ Done";
       }
       setTimeout(() => {
-        btn.textContent = originalText;
-        btn.disabled = false;
+        item.textContent = originalText;
+        item.style.pointerEvents = "";
       }, 2500);
     });
   }
 
-  function makeButton(id, label, color) {
-    const btn = document.createElement("button");
-    btn.id = id;
-    btn.textContent = label;
-    Object.assign(btn.style, {
-      padding: "10px 16px",
-      background: color,
-      color: "#fff",
-      border: "none",
+  function buildMenu(passwordField) {
+    const menu = document.createElement("div");
+    menu.id = "passkey-bridge-menu";
+    Object.assign(menu.style, {
+      position: "fixed",
+      zIndex: "2147483647",
+      background: "#fff",
+      border: "1px solid #ddd",
       borderRadius: "8px",
-      fontSize: "14px",
-      cursor: "pointer",
       boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "14px",
+      overflow: "hidden",
+      display: "none",
     });
-    return btn;
+
+    const toggle = document.createElement("button");
+    toggle.id = "passkey-bridge-toggle";
+    toggle.textContent = "🔑";
+    Object.assign(toggle.style, {
+      position: "fixed",
+      zIndex: "2147483647",
+      width: "28px",
+      height: "28px",
+      border: "none",
+      borderRadius: "6px",
+      background: "#175ddc",
+      color: "#fff",
+      cursor: "pointer",
+      fontSize: "14px",
+    });
+
+    const registerItem = makeMenuItem("Register Passkey", () => {
+      runAction(registerItem, "REGISTER_PASSKEY", "Registering…", (response) => {
+        console.log(`[Passkey Bridge] Register succeeded for "${location.hostname}"`, response.result);
+      });
+    });
+
+    const deriveItem = makeMenuItem("Fill Password", () => {
+      runAction(deriveItem, "DERIVE_HASH", "Deriving…", (response) => {
+        const result = fillDerivedPassword(response.result.password, /* autoSubmit */ false);
+        console.log(`[Passkey Bridge] Fill result for "${location.hostname}"`, result);
+      });
+    });
+
+    menu.appendChild(registerItem);
+    menu.appendChild(deriveItem);
+
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = menu.style.display === "block";
+      menu.style.display = isOpen ? "none" : "block";
+    });
+
+    document.addEventListener("click", () => {
+      menu.style.display = "none";
+    });
+
+    positionNear(toggle, passwordField, 0);
+    positionNear(menu, passwordField, 32);
+
+    document.documentElement.appendChild(toggle);
+    document.documentElement.appendChild(menu);
   }
+
+  function makeMenuItem(label, onClick) {
+    const item = document.createElement("button");
+    item.textContent = label;
+    Object.assign(item.style, {
+      display: "block",
+      width: "100%",
+      padding: "8px 14px",
+      border: "none",
+      background: "none",
+      textAlign: "left",
+      cursor: "pointer",
+      whiteSpace: "nowrap",
+    });
+    item.addEventListener("mouseenter", () => (item.style.background = "#f0f0f0"));
+    item.addEventListener("mouseleave", () => (item.style.background = "none"));
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    return item;
+  }
+
+  function positionNear(el, field, verticalOffset) {
+    const rect = field.getBoundingClientRect();
+    Object.assign(el.style, {
+      top: `${rect.top + verticalOffset}px`,
+      left: `${rect.right + 8}px`,
+    });
+  }
+
+  function scanAndAttach() {
+    if (document.getElementById("passkey-bridge-toggle")) return;
+
+    const passwordField = findPasswordField();
+    if (!passwordField) return;
+
+    buildMenu(passwordField);
+  }
+
+  scanAndAttach();
+  new MutationObserver(scanAndAttach).observe(document.body, { childList: true, subtree: true });
 })();
