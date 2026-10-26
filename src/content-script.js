@@ -51,10 +51,13 @@
   function buildMenu(passwordField) {
     const menu = document.createElement("div");
     menu.id = "passkey-bridge-menu";
+    menu.setAttribute("role", "menu");
     Object.assign(menu.style, {
       position: "fixed",
       zIndex: "2147483647",
+      boxSizing: "border-box",
       background: "#fff",
+      color: "#222",
       border: "1px solid #ddd",
       borderRadius: "8px",
       boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
@@ -64,58 +67,116 @@
       display: "none",
     });
 
-    const toggle = document.createElement("button");
-    toggle.id = "passkey-bridge-toggle";
-    toggle.textContent = "🔑";
-    Object.assign(toggle.style, {
-      position: "fixed",
-      zIndex: "2147483647",
-      width: "28px",
-      height: "28px",
-      border: "none",
-      borderRadius: "6px",
-      background: "#175ddc",
-      color: "#fff",
-      cursor: "pointer",
-      fontSize: "14px",
+    const header = document.createElement("div");
+    header.textContent = "PasskeyBridge";
+    Object.assign(header.style, {
+      padding: "6px 14px",
+      fontSize: "12px",
+      color: "#666",
+      background: "#f7f7f7",
+      borderBottom: "1px solid #eee",
     });
 
     const registerItem = makeMenuItem("Register Passkey", () => {
-      runAction(registerItem, "REGISTER_PASSKEY", "Registering…", (response) => {
+      runAction(registerItem, "REGISTER_PASSKEY", "Registering passkey…", (response) => {
         console.log(`[Passkey Bridge] Register succeeded for "${location.hostname}"`, response.result);
       });
     });
 
     const deriveItem = makeMenuItem("Fill Password", () => {
-      runAction(deriveItem, "DERIVE_HASH", "Deriving…", (response) => {
-        const result = fillDerivedPassword(response.result.password, /* autoSubmit */ false);
+      runAction(deriveItem, "DERIVE_HASH", "Deriving site-specific password…", (response) => {
+        const result = fillDerivedPassword(response.result.password, false);
         console.log(`[Passkey Bridge] Fill result for "${location.hostname}"`, result);
       });
     });
 
-    menu.appendChild(registerItem);
-    menu.appendChild(deriveItem);
+    const items = [registerItem, deriveItem];
+    menu.append(header, ...items);
 
-    toggle.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isOpen = menu.style.display === "block";
-      menu.style.display = isOpen ? "none" : "block";
-    });
+    const isOpen = () => menu.style.display === "block";
 
-    document.addEventListener("click", () => {
+    function place() {
+      const r = passwordField.getBoundingClientRect();
+      menu.style.left = `${r.left}px`;
+      menu.style.minWidth = `${Math.max(r.width, 220)}px`;
+      const below = r.bottom + 4;
+      const fitsBelow = below + menu.offsetHeight <= window.innerHeight - 8;
+      menu.style.top = fitsBelow ? `${below}px` : `${Math.max(8, r.top - menu.offsetHeight - 4)}px`;
+    }
+
+    function open() {
+      if (!passwordField.isConnected) return;
+      menu.style.display = "block"; // must be visible before measuring in place()
+      place();
+    }
+
+    function close() {
       menu.style.display = "none";
+    }
+
+    // Clicking inside the menu must not take focus away from the password field
+    menu.addEventListener("mousedown", (e) => e.preventDefault());
+
+    // Open directly on focus / click (click re-opens after Escape)
+    let suppressFocusOpen = false;
+    passwordField.addEventListener("focus", () => {
+      if (!suppressFocusOpen) open();
+    });
+    passwordField.addEventListener("click", open);
+
+    passwordField.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        close();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!isOpen()) open();
+        items[0].focus();
+      }
     });
 
-    positionNear(toggle, passwordField, 0);
-    positionNear(menu, passwordField, 32);
+    // Close when focus leaves both the field and the menu
+    passwordField.addEventListener("blur", (e) => {
+      if (!menu.contains(e.relatedTarget)) close();
+    });
+    menu.addEventListener("focusout", (e) => {
+      if (e.relatedTarget !== passwordField && !menu.contains(e.relatedTarget)) close();
+    });
 
-    document.documentElement.appendChild(toggle);
+    // Keyboard navigation inside the menu
+    menu.addEventListener("keydown", (e) => {
+      const i = items.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        items[(i + 1) % items.length].focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        items[(i - 1 + items.length) % items.length].focus();
+      } else if (e.key === "Escape") {
+        close();
+        suppressFocusOpen = true;
+        passwordField.focus();
+        suppressFocusOpen = false;
+      }
+    });
+
+    // Stay attached to the field while open
+    const reposition = () => isOpen() && place();
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+
     document.documentElement.appendChild(menu);
+
+    // Field already focused when we attach (autofocus)
+    if (document.activeElement === passwordField) open();
+
+    return { menu, field: passwordField };
   }
 
   function makeMenuItem(label, onClick) {
     const item = document.createElement("button");
+    item.type = "button";
     item.textContent = label;
+    item.setAttribute("role", "menuitem");
     Object.assign(item.style, {
       display: "block",
       width: "100%",
@@ -128,6 +189,8 @@
     });
     item.addEventListener("mouseenter", () => (item.style.background = "#f0f0f0"));
     item.addEventListener("mouseleave", () => (item.style.background = "none"));
+    item.addEventListener("focus", () => (item.style.background = "#f0f0f0"));
+    item.addEventListener("blur", () => (item.style.background = "none"));
     item.addEventListener("click", (e) => {
       e.stopPropagation();
       onClick();
@@ -135,21 +198,20 @@
     return item;
   }
 
-  function positionNear(el, field, verticalOffset) {
-    const rect = field.getBoundingClientRect();
-    Object.assign(el.style, {
-      top: `${rect.top + verticalOffset}px`,
-      left: `${rect.right + 8}px`,
-    });
-  }
+  let attached = null;
 
   function scanAndAttach() {
-    if (document.getElementById("passkey-bridge-toggle")) return;
+    if (attached && attached.field.isConnected) return;
+
+    if (attached) {
+      attached.menu.remove();
+      attached = null;
+    }
 
     const passwordField = findPasswordField();
     if (!passwordField) return;
 
-    buildMenu(passwordField);
+    attached = buildMenu(passwordField);
   }
 
   scanAndAttach();

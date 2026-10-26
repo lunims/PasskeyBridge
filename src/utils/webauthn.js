@@ -1,11 +1,11 @@
-// These functions are passed directly to chrome.scripting.executeScript's
-// `func` option and re-serialized into the target page's MAIN world.
-// They cannot close over anything outside themselves. Any arguments passed
-// in via `args`, and any values returned out, must be plain
-// JSON-serializable data — raw ArrayBuffers are NOT reliably serializable
-// across this specific boundary, so they're converted to plain arrays
-// on both sides.
-
+/**
+ * Function for registering a passkey in the name of the relying party.
+ * It is supposed to be directly passed to the chrome.scripting.executeScript functionality in the page's main world.
+ * 
+ * @returns {Promise<
+ *   { credentialId: string, prfSupported: boolean, hostname: string } |
+ *   { error: string } >} -> Metadata about the new credential, or an error message on failure.
+ */
 export async function registerPasskeyInPage() {
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -17,6 +17,7 @@ export async function registerPasskeyInPage() {
         rp: { name: `Passkey Bridge (${location.hostname})` },
         user: {
           id: userId,
+          // This is just a placeholder value for now
           name: `bridge@${location.hostname}`,
           displayName: `Passkey Bridge — ${location.hostname}`,
         },
@@ -43,7 +44,17 @@ export async function registerPasskeyInPage() {
   }
 }
 
-// saltArray: plain array of bytes (NOT an ArrayBuffer — see note above)
+/**
+ * 
+ * @param {number[]} saltArray Salt bytes (dervied from hostname). 
+ *  Passed as a plain array because typed arrays do not survive the
+ *  executeScript argument serialization.
+ * @returns {Promise<
+ *   { credentialId: string, prfResult: number[] } |
+ *   { error: string }
+ * >} The credential ID that was used and the PRF output bytes (32 bytes for
+ *   hmac-secret), or an error message on failure.
+ */
 export async function deriveHashInPage(saltArray) {
   try {
     const saltBuffer = new Uint8Array(saltArray).buffer;
