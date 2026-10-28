@@ -435,8 +435,7 @@ function update(field, value, form) {
 
 /**
  * Finds the detected login form's password field, for UI purposes such
- * as anchoring a button near it. Not part of the original Browserpass
- * inject.js.
+ * as anchoring a button near it. This is a custom method, which is not part of the Browserpass project
  *
  * @returns {Element|undefined}
  */

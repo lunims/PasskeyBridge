@@ -61,6 +61,14 @@ deriveBtn.addEventListener("click", () =>
   })
 );
 
+/**
+ * Runs a given action inside the current active tab. 
+ * Is used by the register/derive buttons to invoke the functionality given by utils.js
+ * 
+ * @param {string} waitingMsg Text shown in the status area while action is running
+ * @param {(tab: chrome.tabs.Tab) => Promise<{result?: any, error?: string}>} action
+ *   Async function that should run in the active tab.
+ */
 async function runAction(waitingMsg, action) {
   registerBtn.disabled = true;
   deriveBtn.disabled = true;

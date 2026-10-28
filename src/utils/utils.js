@@ -102,12 +102,24 @@ export async function getActiveTab() {
   return tab;
 }
 
+/**
+ * Loads the stored settings for a given hostname. If no settings are specified for this hostname, default settings are returned.
+ * 
+ * @param {String} hostname - hostname to load settings from.
+ * @returns {Promise<object>} - The stored settings, or DEFAULT_SETTINGS if none exist.
+ */
 export async function loadSettings(hostname) {
   const key = `siteSettings:${hostname}`;
   const stored = await chrome.storage.local.get(key);
   return stored[key] ?? DEFAULT_SETTINGS;
 }
 
+/**
+ * Saves a given set of settings for a specific hostname in the browser storage.
+ * 
+ * @param {Object} settings - settings object which should be save.
+ * @param {*} hostname - hostname which the settings should be saved for.
+ */
 export async function saveSettings(settings, hostname) {
   const key = `siteSettings:${hostname}`;
   await chrome.storage.local.set({ [key]: settings });

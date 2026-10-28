@@ -1,5 +1,4 @@
-const PASSWORD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const uppercase = "ABCDEFGHIJKLMNOQRSTUVWXYZ";
 const lowercase = "abcdefghijklmnopqrstuvwxyz";
 const digits    = "0123456789";
 const special   = "!@#$%^&*";
